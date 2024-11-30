@@ -1,209 +1,112 @@
 #include "mbed.h"
 
-Thread masterThread;
-Thread slaveThread;
-// Create a serial object
-static BufferedSerial pc(PC_12, PD_2);
-// static BufferedSerial pc(PE_8, PE_7);
-static BufferedSerial pcmaster(PD_5, PD_6);
-static BufferedSerial debuger(USBTX, USBRX);
-
-// static UnbufferedSerial pcmaster(PD_5, PD_6);
-// static UnbufferedSerial debugger(USBTX, USBRX);
-// static UnbufferedSerial pc(PE_8, PE_7);
-bool processing = 0;
-bool big_data = 0;
-bool transfer = 0;
-static char cmd_keys[255];
-static uint8_t buff;
-char masterBuffer[1] = {};
-char slaveBuffer[1] = {};
-char big_buffer[6]={};
-int transfer_phase = 0;
+// Thread masterThread;
+// Thread slaveThread;
+// // Create a serial object
+// static BufferedSerial pc(PC_12, PD_2);
+// // static BufferedSerial pc(PE_8, PE_7);
+// static BufferedSerial pcmaster(PD_5, PD_6);
+// static UnbufferedSerial debuger(USBTX, USBRX,38400);
 
 
-void init_map() {
-    cmd_keys[(uint8_t)0xA1] = 0;
-    cmd_keys[(uint8_t)0xA2] = 0;
-    cmd_keys[(uint8_t)0xA3] = 0;
-    cmd_keys[(uint8_t)0xA4] = 0;
-    cmd_keys[(uint8_t)0xA5] = 0;
-    cmd_keys[(uint8_t)0xA6] = 0;
-    cmd_keys[(uint8_t)0xA7] = 0;
-    cmd_keys[(uint8_t)0xA8] = 0;
-    cmd_keys[(uint8_t)0xA9] = 0;
-    cmd_keys[(uint8_t)0xAA] = 0;
-    cmd_keys[(uint8_t)0xAD] = 1;
-    cmd_keys[(uint8_t)0xAE] = 1;
-    cmd_keys[(uint8_t)0xD1] = 0;
-    cmd_keys[(uint8_t)0xD2] = 0;
-    cmd_keys[(uint8_t)0xD3] = 0;
-    cmd_keys[(uint8_t)0xDC] = 0;
-    cmd_keys[(uint8_t)0xDE] = 0;
-    cmd_keys[(uint8_t)0xDD] = 1;
-    cmd_keys[(uint8_t)0xE0] = 1;
-    cmd_keys[(uint8_t)0xED] = 0;
-    cmd_keys[(uint8_t)0xED] = 1;
-}
-void master_recv()
-{
-    // led1 = !led1;
-    
-    // while(pc.readable()) {
-    //     pc.read(buff,1);
-    //     pcmaster.write(buff,1);
-    // }
-    if(pc.read(&buff,1)){
-        pcmaster.write(&buff,1);
+
+// Create UnbufferedSerial objects for two serial interfaces
+UnbufferedSerial pc(PC_12, PD_2, 38400); // USB Serial
+UnbufferedSerial uart1(PD_5, PD_6, 38400);  // UART1 Serial (example pins)
+
+// Buffers for serial passthrough
+#define BUFFER_SIZE 1
+char rx_buffer[BUFFER_SIZE];
+char tx_buffer[BUFFER_SIZE];
+const char * pc_str = "pc: ";
+const char * uart1_str = "uart1: ";
+const char * newline_str = "\n";
+
+// Circular buffer pointers
+volatile int rx_read_pos = 0;
+volatile int rx_write_pos = 0;
+volatile int tx_read_pos = 0;
+volatile int tx_write_pos = 0;
+
+EventQueue queue(32 * EVENTS_EVENT_SIZE);
+
+// void write_string(const char *str) {
+//     while (*str) {
+//         debuger.write(str++,1);  // Write each character one by one
+//     }
+// }
+
+// Function to handle reading from pc and writing to uart1
+void passthrough_read_from_pc() {
+    while (pc.readable()) {
+        char c;
+        pc.read(&c, 1);  // Read 1 byte from USB serial
+        
+        // Store received byte in the circular buffer (rx_buffer)
+        // int next_pos = (rx_write_pos + 1) % BUFFER_SIZE;
+        // if (next_pos != rx_read_pos) {  // Check buffer overflow
+        //     rx_buffer[rx_write_pos] = c;
+        //     rx_write_pos = next_pos;
+        // }
+        // printf("I got '%s' from pc\n", c);
+        // write_string("pc: ");
+        // debuger.write(&c,1);
+        // write_string("\n");
+        uart1.write(&c,1);
     }
 }
 
-void pc_recv()
-{
-    // led4 = !led4;
-    // while(pcmaster.readable()) {
-    //     pcmaster.read(buff,1);
-    //     pc.write(buff,1);
-    // }
-    if(pcmaster.read(&buff,1)){
-        pc.write(&buff,1);
+// Function to handle reading from uart1 and writing to pc
+void passthrough_read_from_uart1() {
+    while (uart1.readable()) {
+        char c;
+        uart1.read(&c, 1);  // Read 1 byte from UART1
+        
+        // Store received byte in the circular buffer (tx_buffer)
+        // int next_pos = (tx_write_pos + 1) % BUFFER_SIZE;
+        // if (next_pos != tx_read_pos) {  // Check buffer overflow
+        //     tx_buffer[tx_write_pos] = c;
+        //     tx_write_pos = next_pos;
+        // }
+        // printf("I got '%s' from uart1\n", c);
+        // write_string("uart1: ");
+        // debuger.write(&c,1);
+        // write_string("\n");
+        pc.write(&c,1);
     }
 }
 
-void master_thread() {
-    printf("Start master thread\n");
-    while(1){
-        if (pcmaster.readable()) {
-            // ThisThread::sleep_for(100);
-            // sleep();
-            // ThisThread::sleep_for(100);
-            // ThisThread::sleep_for(1);
-            pcmaster.read(masterBuffer, 1);
-            // switch(buffer[0]){
-            // if(!processing) {
-                
-            //     int i = 0;
-            //     i = (uint8_t)masterBuffer[0];
-            //     // printf("%i    %i\n",i,cmd_keys[0]);
-            //     processing = 1;
-            //     big_data = cmd_keys[i];
-            //     // printf("Processing start\n");
-            //     // watchdog.start(500);
-                
-            // }
-            // if (big_data && (masterBuffer[0] == 0xAC)) {
-            //     transfer = 1;
-            // }
-            
-            // }
-            printf("I got '%02x' from master\n", masterBuffer[0]);
-            // pcslave1.write("I got ",6);
-            // pcslave1.write(buffer,sizeof(buffer));
-            // // pc1.write(" \n",2);
-            // pc.write("I have ",7);
-            pc.write(masterBuffer,1);
-            // // pc2.write(" \n",2);
-            // // pcslave2.write("I lick ",7);
-            // // printf("I got '%s'\n", buffer);
-            // // pcslave2.write(buffer,sizeof(buffer));
-            // // pc3.write(" \n",2);
-            // memset(buffer,'\0',sizeof(buffer));
-            // pc.sync();
+// Function to transmit data from rx_buffer to uart1
+void passthrough_write_to_uart1() {
+    while (tx_read_pos != tx_write_pos) {
+        if (uart1.writeable()) {
+            uart1.write(&tx_buffer[tx_read_pos], 1);  // Write 1 byte to UART1
+            tx_read_pos = (tx_read_pos + 1) % BUFFER_SIZE;
         }
     }
 }
 
-void slave_thread() {
-    printf("Start slave thread\n");
-    while(1) {
-        if (pc.readable()) {
-            // ThisThread::sleep_for(100);
-            // sleep();
-            // ThisThread::sleep_for(100);
-            // ThisThread::sleep_for(1);
-            pc.read(slaveBuffer, sizeof(slaveBuffer));
-
-            // printf("I got '%02x' from slave\n", slaveBuffer[0]);
-            // for(int j = 0; j < 24; j++) {
-            //     printf("%i \n", big_buffer[j]);
-            // }
-            // if (processing) {
-            //     if (transfer) {
-            //         while(transfer_phase < 4){
-            //             // ThisThread::sleep_for(5);
-            //             pc.read(big_buffer, sizeof(big_buffer));
-
-            //             // printf("I got '%i' from slave\n", sizeof(big_buffer));
-            //             // for(int j = 0; j < 24; j++) {
-            //             //     printf("%i \n", big_buffer[j]);
-            //             // }
-            //             pcmaster.write(big_buffer,sizeof(big_buffer));
-                        
-            //             transfer_phase++;
-            //         }
-            //         processing = 0;
-            //         transfer = 0;
-            //         big_data = 0;
-            //         transfer_phase = 0;
-            //         // watchdog.stop();
-            //         // printf("processing end with big data\n");
-                    
-            //     }
-            //     else{
-            //         pc.read(slaveBuffer, sizeof(slaveBuffer));
-            //         if (slaveBuffer[0] == 0xAC) {
-            //             processing = 0;
-                        
-            //             // watchdog.stop();
-            //             // printf("processing end\n");
-            //         }
-            //         // printf("I got '%02x' from slave\n", slaveBuffer[0]);
-            //         pcmaster.write(slaveBuffer,sizeof(slaveBuffer));
-            //     }
-            // }
-            // pc.read(slaveBuffer, sizeof(slaveBuffer));
-            // switch(buffer[0]){
-
-            // }
-            printf("I got '%02x' from slave\n", slaveBuffer[0]);
-            // pcslave1.write("I got ",6);
-            // pcslave1.write(buffer,sizeof(buffer));
-            // // pc1.write(" \n",2);
-            // pc.write("I have ",7);
-            pcmaster.write(slaveBuffer,sizeof(slaveBuffer));
-
+// Function to transmit data from tx_buffer to pc
+void passthrough_write_to_pc() {
+    while (rx_read_pos != rx_write_pos) {
+        if (pc.writeable()) {
+            pc.write(&rx_buffer[rx_read_pos], 1);  // Write 1 byte to USB Serial
+            rx_read_pos = (rx_read_pos + 1) % BUFFER_SIZE;
         }
     }
-    
 }
 
-int main(void)
-{
-    
-    // pcmaster.baud(38400);
-    // pc.baud(38400);
-    pcmaster.set_baud(38400);
-    pc.set_baud(38400);
-    debuger.set_baud(38400);
-    // Watchdog &watchdog = Watchdog::get_instance();
-    // pc.format(
-    //     /* bits */ 8,
-    //     /* parity */ SerialBase::None,
-    //     /* stop bit */ 1
-    // );
-    init_map();
-    // ThisThread::sleep_for(100);
-    // printf("Restart");
-    // pc.attach(&pc_recv);
-    // pcmaster.attach(&master_recv);
-    masterThread.start(master_thread);
-    slaveThread.start(slave_thread);
-    masterThread.join();
-    slaveThread.join();
-    // while (1) {
-    //     // sleep();
-        
-        
-        
-    // }
+int main() {
+    // Attach the interrupt functions to monitor readable serial data
+    pc.attach(&passthrough_read_from_pc, SerialBase::RxIrq); // Trigger on USB Serial read
+    uart1.attach(&passthrough_read_from_uart1, SerialBase::RxIrq); // Trigger on UART1 read
+
+    // Use EventQueue to manage the passthrough
+    // queue.call_every(10ms, passthrough_write_to_uart1);  // Check every 10 ms for data to write to UART1
+    // queue.call_every(10ms, passthrough_write_to_pc);    // Check every 10 ms for data to write to PC
+
+    // Main loop is empty; all the work is done by interrupts and EventQueue
+    while (true) {
+        // queue.dispatch();  // Execute events in the queue
+    }
 }

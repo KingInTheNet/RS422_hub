@@ -82,9 +82,9 @@ void passthrough_read_from_master() {
         unsigned char c;
         master.read(&c, 1);  // Read 1 byte from Master
         
-        sprintf(temp_str,"%i\n",c);
-        // i = (uint8_t) c;
-        debuger.write(temp_str,4);
+        // sprintf(temp_str,"%i\n",c);
+        // // i = (uint8_t) c;
+        // debuger.write(temp_str,4);
         // write_string("\n");
         if ((uint8_t)c == 0xFA){
             write_string("Switch detected\n ");

@@ -25,3 +25,10 @@ $ pio run -e disco_f769ni --target upload
 # Clean build files
 $ pio run --target clean
 ```
+
+Basic functions: slave1 initialize on UART5 (PC_12, PD_2, 38400)
+                 slave2 initialize on UART7 (PE_8, PE_7,38400)
+                 master initialize on UART2 (PD_5, PD_6, 38400)
+Each functions have read Callback attached to RxIrq
+Since there is no way to specify which slave is being communicated with, I included a switch command specifically for hub (0xFA) that automatically switch the current slave to next slave. This byte is not transmitted to slave.
+Further optimization can be done with DMA that might theoretically increase transmission speed, but as of now speed is being bottle necked by slave and master on windows machine

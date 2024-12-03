@@ -28,11 +28,6 @@ const char * newline_str = "\n";
 char temp_str[5];
 int current_slave = 1;
 
-// Circular buffer pointers
-// volatile int rx_read_pos = 0;
-// volatile int rx_write_pos = 0;
-// volatile int tx_read_pos = 0;
-// volatile int tx_write_pos = 0;
 void init_map() {
     cmd_keys[(uint8_t)0xA1] = TYPE_A;
     cmd_keys[(uint8_t)0xA2] = TYPE_A;
@@ -56,7 +51,7 @@ void init_map() {
     cmd_keys[(uint8_t)0xED] = TYPE_A;
     cmd_keys[(uint8_t)0xED] = TYPE_B;
 }
-// EventQueue queue(32 * EVENTS_EVENT_SIZE);
+
 
 void write_string(const char *str) {
     while (*str) {
@@ -68,18 +63,7 @@ void write_string(const char *str) {
 void passthrough_read_from_slave1() {
     while (slave1.readable() && (current_slave == 1)) {
         unsigned char c;
-        slave1.read(&c, 1);  // Read 1 byte from USB serial
-        
-        // Store received byte in the circular buffer (rx_buffer)
-        // int next_pos = (rx_write_pos + 1) % BUFFER_SIZE;
-        // if (next_pos != rx_read_pos) {  // Check buffer overflow
-        //     rx_buffer[rx_write_pos] = c;
-        //     rx_write_pos = next_pos;
-        // }
-        // printf("I got '%s' from pc\n", c);
-        // write_string("pc: ");
-        // debuger.write(&c,1);
-        // write_string("\n");
+        slave1.read(&c, 1);  // Read 1 byte from slave1
         master.write(&c,1);
     }
 }
@@ -87,36 +71,17 @@ void passthrough_read_from_slave1() {
 void passthrough_read_from_slave2() {
     while (slave2.readable() && (current_slave == 2)) {
         unsigned char c;
-        slave2.read(&c, 1);  // Read 1 byte from USB serial
-        
-        // Store received byte in the circular buffer (rx_buffer)
-        // int next_pos = (rx_write_pos + 1) % BUFFER_SIZE;
-        // if (next_pos != rx_read_pos) {  // Check buffer overflow
-        //     rx_buffer[rx_write_pos] = c;
-        //     rx_write_pos = next_pos;
-        // }
-        // printf("I got '%s' from pc\n", c);
-        // write_string("pc: ");
-        // debuger.write(&c,1);
-        // write_string("\n");
+        slave2.read(&c, 1);  // Read 1 byte from slave2
         master.write(&c,1);
     }
 }
 
-// Function to handle reading from uart1 and writing to pc
+// Function to handle reading from master and writing to slave
 void passthrough_read_from_master() {
     while (master.readable()) {
         unsigned char c;
-        master.read(&c, 1);  // Read 1 byte from UART1
+        master.read(&c, 1);  // Read 1 byte from Master
         
-        // Store received byte in the circular buffer (tx_buffer)
-        // int next_pos = (tx_write_pos + 1) % BUFFER_SIZE;
-        // if (next_pos != tx_read_pos) {  // Check buffer overflow
-        //     tx_buffer[tx_write_pos] = c;
-        //     tx_write_pos = next_pos;
-        // }
-        // printf("I got '%s' from uart1\n", c);
-        // write_string("master: ");
         sprintf(temp_str,"%i\n",c);
         // i = (uint8_t) c;
         debuger.write(temp_str,4);
@@ -129,44 +94,33 @@ void passthrough_read_from_master() {
             }
         }
         else{
-            slave1.write(&c,1);
+            switch (current_slave){
+                case 1:
+                    slave1.write(&c,1);
+                    break;
+                case 2:
+                    slave2.write(&c,1);
+                    break;
+                default:
+                    slave1.write(&c,1);
+                    break;
+            }
+            
         }
         
     }
 }
 
-// Function to transmit data from rx_buffer to uart1
-// void passthrough_write_to_uart1() {
-//     while (tx_read_pos != tx_write_pos) {
-//         if (uart1.writeable()) {
-//             uart1.write(&tx_buffer[tx_read_pos], 1);  // Write 1 byte to UART1
-//             tx_read_pos = (tx_read_pos + 1) % BUFFER_SIZE;
-//         }
-//     }
-// }
 
-// Function to transmit data from tx_buffer to pc
-// void passthrough_write_to_pc() {
-//     while (rx_read_pos != rx_write_pos) {
-//         if (pc.writeable()) {
-//             pc.write(&rx_buffer[rx_read_pos], 1);  // Write 1 byte to USB Serial
-//             rx_read_pos = (rx_read_pos + 1) % BUFFER_SIZE;
-//         }
-//     }
-// }
 
 int main() {
     // Attach the interrupt functions to monitor readable serial data
-    slave1.attach(&passthrough_read_from_slave1, SerialBase::RxIrq); // Trigger on USB Serial read
-    slave2.attach(&passthrough_read_from_slave2, SerialBase::RxIrq); // Trigger on USB Serial read
-    master.attach(&passthrough_read_from_master, SerialBase::RxIrq); // Trigger on UART1 read
+    slave1.attach(&passthrough_read_from_slave1, SerialBase::RxIrq); // Trigger on slave1 read
+    slave2.attach(&passthrough_read_from_slave2, SerialBase::RxIrq); // Trigger on slave2 read
+    master.attach(&passthrough_read_from_master, SerialBase::RxIrq); // Trigger on master read
 
-    // Use EventQueue to manage the passthrough
-    // queue.call_every(10ms, passthrough_write_to_uart1);  // Check every 10 ms for data to write to UART1
-    // queue.call_every(10ms, passthrough_write_to_pc);    // Check every 10 ms for data to write to PC
-
-    // Main loop is empty; all the work is done by interrupts and EventQueue
+    // Main loop is empty; all the work is done by Interupts
     while (true) {
-        // queue.dispatch();  // Execute events in the queue
+        
     }
 }
